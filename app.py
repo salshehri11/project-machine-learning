@@ -1,9 +1,3 @@
-
-# ===============================
-# STREAMLIT DASHBOARD APP
-# Save as app.py
-# ===============================
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -130,5 +124,4 @@ st.download_button(
     "filtered_hotel_data.csv",
     "text/csv"
 )
-
 
