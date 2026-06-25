@@ -1,112 +1,134 @@
+
+# ===============================
+# STREAMLIT DASHBOARD APP
+# Save as app.py
+# ===============================
+
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
 
-# Page Config
-st.set_page_config(
-    page_title="Hotel Reservation Analysis",
-    page_icon="🏨",
-    layout="wide"
-)
+st.set_page_config(page_title="Hotel Reservation Dashboard",
+                   page_icon="🏨",
+                   layout="wide")
 
-st.title("🏨 Hotel Reservation Analysis Dashboard")
-
-# Load Data
 @st.cache_data
 def load_data():
     df = pd.read_csv("Hotel Reservations.csv")
+
+    df["total_guests"] = (
+        df["no_of_adults"]
+        + df["no_of_children"]
+    )
+
+    df["total_nights"] = (
+        df["no_of_weekend_nights"]
+        + df["no_of_week_nights"]
+    )
+
+    df["total_booking_value"] = (
+        df["avg_price_per_room"]
+        * df["total_nights"]
+    )
+
     return df
 
 df = load_data()
 
-# Sidebar
-st.sidebar.header("Dashboard Menu")
+st.sidebar.header("Filters")
 
-page = st.sidebar.radio(
-    "Select Section",
-    ["Dataset Overview", "Statistics", "Visualizations", "Insights"]
+status = st.sidebar.multiselect(
+    "Booking Status",
+    df["booking_status"].unique(),
+    default=df["booking_status"].unique()
 )
 
-# -------------------------------
-# Dataset Overview
-# -------------------------------
-if page == "Dataset Overview":
+segment = st.sidebar.multiselect(
+    "Market Segment",
+    df["market_segment_type"].unique(),
+    default=df["market_segment_type"].unique()
+)
 
-    st.subheader("Dataset Shape")
+filtered_df = df[
+    (df["booking_status"].isin(status)) &
+    (df["market_segment_type"].isin(segment))
+]
 
-    col1, col2 = st.columns(2)
+st.title("🏨 Hotel Reservation Dashboard")
 
-    with col1:
-        st.metric("Rows", df.shape[0])
+c1, c2, c3, c4 = st.columns(4)
 
-    with col2:
-        st.metric("Columns", df.shape[1])
+c1.metric("Bookings", len(filtered_df))
+c2.metric("Avg Price", round(filtered_df["avg_price_per_room"].mean(),2))
+c3.metric("Avg Nights", round(filtered_df["total_nights"].mean(),2))
+c4.metric("Revenue", f"{filtered_df['total_booking_value'].sum():,.0f}")
 
-    st.subheader("First 5 Rows")
-    st.dataframe(df.head())
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["Overview","Cancellation","Revenue","Correlation"]
+)
 
-# -------------------------------
-# Statistics
-# -------------------------------
-elif page == "Statistics":
+with tab1:
 
-    st.subheader("Summary Statistics")
-    st.dataframe(df.describe())
-
-    st.subheader("Missing Values")
-    st.dataframe(df.isnull().sum().reset_index())
-
-# -------------------------------
-# Visualizations
-# -------------------------------
-elif page == "Visualizations":
-
-    st.subheader("Booking Status Distribution")
-
-    fig, ax = plt.subplots()
-    df["booking_status"].value_counts().plot(
-        kind="pie",
-        autopct="%1.1f%%",
-        ax=ax
+    fig = px.pie(
+        filtered_df,
+        names="booking_status",
+        hole=0.5,
+        title="Booking Status Distribution"
     )
-    ax.set_ylabel("")
-    st.pyplot(fig)
 
-    st.subheader("Lead Time vs Booking Status")
+    st.plotly_chart(fig, use_container_width=True)
 
-    fig, ax = plt.subplots(figsize=(8, 4))
-    sns.boxplot(
-        data=df,
+with tab2:
+
+    fig = px.box(
+        filtered_df,
         x="booking_status",
         y="lead_time",
-        ax=ax
+        color="booking_status",
+        title="Lead Time vs Booking Status"
     )
-    st.pyplot(fig)
 
-    st.subheader("Room Price vs Booking Status")
+    st.plotly_chart(fig, use_container_width=True)
 
-    fig, ax = plt.subplots(figsize=(8, 4))
-    sns.boxplot(
-        data=df,
-        x="booking_status",
-        y="avg_price_per_room",
-        ax=ax
+with tab3:
+
+    revenue = (
+        filtered_df
+        .groupby("market_segment_type")["total_booking_value"]
+        .sum()
+        .reset_index()
     )
-    st.pyplot(fig)
 
-# -------------------------------
-# Insights
-# -------------------------------
-else:
+    fig = px.bar(
+        revenue,
+        x="market_segment_type",
+        y="total_booking_value",
+        title="Revenue by Segment"
+    )
 
-    st.subheader("Key Insights")
+    st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("""
-    - Customers with longer lead times are more likely to cancel.
-    - Higher room prices tend to have higher cancellation rates.
-    - Longer stays generate more revenue.
-    - Repeated guests are more reliable.
-    - Booking behavior changes by season.
-    - Different market segments show different booking patterns.
-    """)
+with tab4:
+
+    corr = filtered_df.select_dtypes(include="number").corr()
+
+    fig = px.imshow(
+        corr,
+        text_auto=True,
+        aspect="auto",
+        title="Correlation Heatmap"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+st.subheader("Filtered Data")
+st.dataframe(filtered_df)
+
+st.download_button(
+    "Download Filtered Data",
+    filtered_df.to_csv(index=False),
+    "filtered_hotel_data.csv",
+    "text/csv"
+)
+
+
